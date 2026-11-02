@@ -23,7 +23,8 @@ Edit `SKILL.md` and `references/patterns.md` directly. When making changes:
 - When preparing a release, update the SKILL.md frontmatter (`version: X.Y.Z`), `package.json`, and the dated changelog heading. Update the same version manually in both plugin manifests before syncing:
   - `plugins/avoid-ai-writing/.claude-plugin/plugin.json`
   - `.codex-plugin/plugin.json`
-- Run `bash scripts/sync-plugin-skill.sh && bash scripts/sync-cursor-rules.sh`. The first script validates both manifest versions against `SKILL.md` and regenerates bundled skill copies, detector resources, scripts, and examples; the second regenerates the portable paste/Cursor artifacts. Neither script generates the manifest versions. A mismatch fails with messages such as `version mismatch: SKILL.md=X Claude plugin=Y` or `version mismatch: SKILL.md=X OpenAI plugin=Y`.
+- Update the same version in the six hand-written `skills/*/SKILL.md` frontmatters (all but the generated `skills/avoid-ai-writing/SKILL.md`). `python3 scripts/validate-openai-plugin.py . --json` fails when one differs from the OpenAI manifest.
+- Run `bash scripts/sync-plugin-skill.sh && bash scripts/sync-cursor-rules.sh`. The first script validates both manifest versions and the `package.json` version against `SKILL.md` and regenerates bundled skill copies, detector resources, scripts, and examples; the second regenerates the portable paste/Cursor artifacts. Neither script generates the manifest versions. A mismatch fails with messages such as `version mismatch: SKILL.md=X Claude plugin=Y`, `version mismatch: SKILL.md=X OpenAI plugin=Y`, or `version mismatch: SKILL.md=X package.json=Y`.
 - Run `npm test` to exercise the detector, category contract, validator, corpus helpers, and style checks.
 - Update README.md if the change affects installation, usage, feature list, or pattern count
 - The pattern count is canonical in the README "74 pattern categories" bullet (derived from references/patterns.md's detection `###` entries). This bullet quotes that number here as a **checked copy** for agent context — update README and this sentence when you add or remove a detection category. Don't restate the count elsewhere; CI (`scripts/check-pattern-count.sh`) fails if either literal drifts from `references/patterns.md`.
@@ -36,7 +37,7 @@ The skill has three modes (`rewrite` default, `detect` flag-only, `edit` in-plac
 2. **Pattern matching** — detection categories across content, language, structure, communication, and meta patterns (see references/patterns.md for the catalog; the count is in the README bullet)
 3. **Vocabulary flagging** — 3-tier system: Tier 1 (always flag), Tier 2 (flag in clusters), Tier 3 (flag at high density)
 4. **Severity classification** — P0 (credibility killers), P1 (obvious AI smell), P2 (stylistic polish)
-5. **Output** — rewrite mode: 4 sections including a second-pass audit; detect mode: 2 sections with problem vs. judgment-call assessment
+5. **Output** — rewrite mode: one final rewrite, useful change summary, and verification; detailed findings on request. Detect mode: findings and assessment
 
 ## Key constraints
 

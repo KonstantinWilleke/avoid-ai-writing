@@ -32,6 +32,86 @@ node scripts/fp-measure.js       # the measurement
 changed under us invalidates the measurement it backs, and that should be an
 argument, not a silent update.
 
+## How text reaches the detector
+
+`fp-measure.js` reads each available source once, verifies that snapshot against
+its manifest hash, and constructs rows from those same bytes before scoring.
+An unavailable source is reported separately; a hash mismatch stops the run.
+Neither measurement nor comparison rewrites the manifest.
+
+Preparation has three steps: classify source lines, join ordinary prose wraps,
+then select units. Explicit Markdown headings, blockquotes, lists, indented
+code, and complete fenced regions retain their line structure. CRLF and lone
+CR become LF. Fences stay intact across blank lines, including an unclosed
+fence that runs to the end of the document. A bullet or an ordered marker whose
+start number is 1 can interrupt prose; another ordered marker starts a list at
+an explicit block boundary, following the relevant [CommonMark list-item
+rule](https://spec.commonmark.org/0.31.2/#list-items). Thus a hard-wrapped line
+that starts `1859.` remains prose. Colon-heading inference runs after explicit
+structure is classified. Because that heuristic depends on the following line,
+it does not turn an otherwise prose `2.` or `1859.` line into a list boundary.
+
+Document mode preserves the ordered words and markers in the input; it applies
+no paragraph word limit. Paragraph mode retains bodies of 50–400 whitespace
+tokens. The nearest preceding heading attaches when the combined unit fits;
+otherwise an eligible body is scored alone. Oversized bodies are skipped with
+a reason, without being split. Multiple headings cannot consume each other
+and discard the body. Selection counts literal source tokens, including ATX
+markers such as `##` and setext underlines such as `=====`. It does not strip
+heading syntax at the 50- and 400-token boundaries.
+
+A short initial line ending in a colon can still be inferred as a heading.
+An immediate lowercase prose continuation prevents that inference; explicit
+Markdown heading syntax takes precedence over case. These decisions carry
+`colon-inferred` provenance because attribution prose can have the same shape.
+This heuristic needs inspection when comparing a new corpus.
+
+Selection and detector acceptance are separate. For example, a document over
+the detector's 10,000-word ceiling is preserved during preparation but recorded
+as `detector-too-long`. Quotation masking can make an otherwise eligible unit
+too short. The 50-word selection floor counts source tokens; the detector's
+existing minimum is ten visible words after masking. A selected paragraph can
+therefore have 10–49 detector-visible words. Both counts remain in the dump so
+this population can be inspected without silently changing the measurement
+policy. Code structure is preserved for the detector's structural rules;
+the existing detector still checks some vocabulary inside code.
+
+To inspect every decision without exporting corpus text:
+
+```bash
+node scripts/fp-measure.js --unit paragraph --dump-units /tmp/paragraph-units.jsonl --json
+node scripts/fp-measure.js --unit document --dump-units /tmp/document-units.jsonl --json
+```
+
+The destination must be a new file. The first JSONL record contains schema
+version, Git revision, manifest and code fingerprints, verified source hashes,
+detector options, and totals. Subsequent records include selected and skipped
+units: original source spans, row identity, class, register, model, structural
+kinds, heading attachment, optional blank-separated continuation-merge
+provenance, input and detector word counts, score, categories, and skip reason.
+Spans use JavaScript UTF-16 offsets into the original row, with an inclusive
+start and exclusive end. Unit IDs use source identity and spans; indexes are
+only local ordering hints. Normalized text has its own hash. The shared
+measurement-harness fingerprint covers `fp-measure.js` and `fp-preprocess.js`,
+including both preprocessing sources. Branch-specific preprocessor fingerprints
+identify which normalization implementation each run selected. Unavailable
+sources have separate records and do not count as skipped units.
+
+The comparison command runs both preprocessing paths with the same detector
+and available corpus. Its legacy path reproduces main at `fabd62d9`:
+
+```bash
+node scripts/fp-compare.js --out /tmp/fp-comparison
+```
+
+Compare selected and skipped populations alongside category counts, source
+and register rates, and individual changed spans. A rate change may reflect a
+different set of units or restored Markdown boundaries. It does not by itself
+establish better authorship detection. Missing sources remain visible and
+limit the comparison. The summary caps detailed change examples, while its
+compact `absorbedHeadings` mapping retains every skipped heading folded into a
+paired current unit.
+
 ## Register is the unit of analysis
 
 Not a label of convenience. Patina's Korean human-control pilot measured false
@@ -66,19 +146,22 @@ only **0.92 similar** to its currently published counterpart, and five of the
 twenty-five fall below 0.90. Measuring "his pre-2023 writing" against pages
 edited in 2025 would have measured the wrong thing.
 
-**One documentation source**, [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259),
-is included as a first `docs` seed. It is a pre-LLM, human-authored
-standards-track document with a named editor and a stable IETF publication
-record. It is useful for checking that the fetch-and-hash path handles a
-technical document, but one source is nowhere near a register-level sample.
+**Two documentation sources** are included as `docs` seeds:
+[RFC 8259](https://www.rfc-editor.org/rfc/rfc8259), a standards-track document
+with a named editor, and [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180), an
+Informational RFC with a single named author. Both are pre-LLM, human-authored
+documents with a stable IETF publication record. They are useful for checking
+that the fetch-and-hash path handles technical documents, but two sources are
+nowhere near a register-level sample.
 
-**One conversational source**, a 1995 message from the public
-[W3C `www-talk` archive](https://lists.w3.org/Archives/Public/www-talk/1995MayJun/0026.html),
-is included as a first `conversational` seed. It is a pre-LLM mailing-list
-exchange with preserved author, date, and thread context. The archive's page
-chrome is excluded by the HTML extractor; only the message page's main content
-is hashed. This seed is still far short of the `n >= 100` units needed for a
-claim.
+**Two conversational sources**, both May 1995 messages from the public
+W3C `www-talk` archive, are included as small `conversational` seeds:
+[Nathaniel Borenstein's "Re: Session tracking"](https://lists.w3.org/Archives/Public/www-talk/1995MayJun/0026.html)
+and [Brian Behlendorf's "Re: CGI spec revisited"](https://lists.w3.org/Archives/Public/www-talk/1995MayJun/0027.html).
+Both are pre-LLM mailing-list exchanges with preserved author, date, and thread
+context. The archive's page chrome is excluded by the HTML extractor; only each
+message page's main content is hashed. Two seeds are still far short of the
+`n >= 100` units needed for a claim.
 
 The manifest therefore has non-zero coverage for `docs` and `conversational`,
 but both remain under-sampled. `social` and `email` remain at zero: social posts
@@ -134,6 +217,10 @@ true-positive rate measured here is an **upper bound** on performance against
 current models, not an estimate of it. Nothing here has seen a 2026 model.
 
 ## Results (v3.22.0, 2026-07-31)
+
+These results used the historical whitespace-flattening preparation path. The
+legacy and repaired paths were compared with a pinned detector in the immutable
+[#290 comparison evidence](https://github.com/conorbronsdon/avoid-ai-writing/tree/39accce14131723c796ee640d88c3fe1b0223815/corpus/reports/fp-preprocessing-86ef5ab3).
 
 875 human paragraphs, 779 machine paragraphs.
 
@@ -212,10 +299,12 @@ labels. The detector matches stock first-person introductions in expository and
 social prose. Those are different constructs in different registers, so the
 paper supplies no direction for this category's authorship weight.
 
-The document and paragraph measurement paths collapse source line breaks, so
-their counts do not cover line-anchored header variants. A separate raw-text
-scan found no matches either. That control supports the absence reported here;
-it does not validate the measurement preprocessing for other categories.
+The historical document and paragraph measurements above collapsed source line
+breaks, so their counts did not cover line-anchored header variants. A separate
+raw-text scan found no matches either. That control supports the absence
+reported there; it does not validate other categories. The repaired preparation
+described above preserves structural boundaries. Use its fixed-corpus comparison
+before drawing conclusions from new measurements.
 
 **Decision for this unobserved category.** Zero hits on both sides select no
 branch of the issue #82 lift-based decision rule. Because the rule was challenged
@@ -260,6 +349,11 @@ write in today, and carries a confidence interval. The current run satisfies the
 interval and the n, and fails the register test outright.
 
 ## Adding to it
+
+For bounded source proposals, see the [corpus intake task drafts](INTAKE_TASKS.md)
+and their offline fetch/hash example. Check live claims before starting. Public
+newsletter archives may supply email evidence; private correspondence must not
+be submitted, including as hashes.
 
 Public-domain or permissively licensed source, fetchable by URL:
 

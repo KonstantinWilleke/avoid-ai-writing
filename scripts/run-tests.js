@@ -8,21 +8,31 @@ const root = path.resolve(__dirname, '..');
 /** Default `npm test` suites, in run order. */
 const SUITES = [
   'scripts/flatten-skill.test.js',
+  'scripts/editorial-cards.test.js',
+  'scripts/vale-export-sample.test.js',
+  'scripts/reference-loading.test.js',
   'detector/patterns.test.js',
   'detector/categories.test.js',
   'detector/validate.test.js',
   'scripts/corpus.test.js',
+  'scripts/corpus-intake-example.test.js',
   'scripts/check-style.test.js',
   'scripts/normalize-quotes.test.js',
+  'scripts/verify-release-versions.test.js',
   'scripts/fp-measure.test.js',
+  'scripts/fp-preprocess.test.js',
+  'scripts/fp-compare.test.js',
   'scripts/self-scan.test.js',
   'scripts/self-scan-diagnostics.test.js',
   'scripts/test-canonical-skill-package.js',
   'bin/avoid-ai-writing.test.js',
   'bin/avoid-ai-writing-gate.test.js',
+  'scripts/detect-parity.test.js',
   'scripts/rewrite-demo.test.js',
   'scripts/rewrite-eval.test.js',
+  'scripts/rewrite-eval-opencode.test.js',
   'scripts/fp-measure-cli.test.js',
+  'scripts/check-detect-audit.test.js',
 ];
 
 function resolveSuite(arg) {
